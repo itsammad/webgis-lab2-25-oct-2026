@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Islamabad Telecom Infrastructure | Web GIS</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232b2d31'/%3E%3Cpath d='M32 12c-8.8 0-16 7-16 15.7C16 39.5 32 53 32 53s16-13.5 16-25.3C48 19 40.8 12 32 12z' fill='%23fff'/%3E%3Ccircle cx='32' cy='27' r='6.5' fill='%232b2d31'/%3E%3C/svg%3E">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Leaflet + MarkerCluster -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="loading">
+
+    <!-- Full-screen map -->
+    <div id="map"></div>
+
+    <!-- Floating UI layer -->
+    <div class="ui">
+
+        <!-- Title, study area and data source (assignment requirement 8) -->
+        <header class="glass title-card">
+            <h1>Telecom Infrastructure Web GIS</h1>
+            <p><b>Study area:</b> Islamabad &amp; Rawalpindi (33.55&ndash;33.80&deg;N, 72.90&ndash;73.25&deg;E)</p>
+            <p><b>Data source:</b> OpenStreetMap, fetched live from the Overpass API (no API key)</p>
+
+            <!-- Loading status (shown while data is being fetched) -->
+            <div class="load-banner" id="loadBanner" role="status" aria-live="polite">
+                <div class="load-row">
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span class="load-text" id="loadText">Contacting OpenStreetMap server&hellip;</span>
+                    <span class="load-time" id="loadTime">0 s</span>
+                </div>
+                <div class="load-bar" aria-hidden="true"><i></i></div>
+                <div class="load-hint" id="loadHint" hidden>The public OpenStreetMap server can be slow. Please wait, data is still loading.</div>
+            </div>
+        </header>
+
+        <!-- ============ LEFT COLUMN ============ -->
+        <aside class="left-col">
+
+            <nav class="glass nav-pill" aria-label="Tools">
+                <button class="nav-btn active" id="navPanels" title="Show / hide stats panels" aria-label="Toggle stats panels">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                </button>
+                <button class="nav-btn" id="navList" title="Show / hide station list" aria-label="Toggle station list">
+                    <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>
+                </button>
+                <button class="nav-btn active" id="navCluster" title="Cluster nearby towers" aria-label="Toggle clustering" aria-pressed="true">
+                    <svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="4"/><circle cx="16.5" cy="14.5" r="3.5"/><circle cx="7" cy="17.5" r="2"/></svg>
+                </button>
+                <button class="nav-btn" id="navFit" title="Zoom to visible towers" aria-label="Zoom to visible towers">
+                    <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+                </button>
+            </nav>
+
+            <div class="stats-stack">
+                <!-- Total towers -->
+                <section class="glass card total-card">
+                    <div class="total-label">Towers shown</div>
+                    <div class="big-number skel" id="totalNumber">0</div>
+                    <div class="pill-note" id="areaNote">Islamabad &middot; Rawalpindi</div>
+                    <div class="bars" id="histBars" aria-label="Tower density from west to east"></div>
+                    <div class="bars-axis"><span>West</span><span>Centre</span><span>East</span></div>
+                </section>
+
+                <!-- Line chart -->
+                <section class="glass card">
+                    <div class="card-head">
+                        <h3>Tower density</h3>
+                        <span class="muted">south &rarr; north</span>
+                    </div>
+                    <div class="line-wrap" id="lineWrap">
+                        <svg viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true">
+                            <defs>
+                                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#9db8d9" stop-opacity=".45"/>
+                                    <stop offset="100%" stop-color="#9db8d9" stop-opacity="0"/>
+                                </linearGradient>
+                            </defs>
+                            <path id="lineArea" d="" fill="url(#areaGrad)"/>
+                            <path id="linePath" d="" fill="none" stroke="#8aa5c8" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+                        </svg>
+                        <span class="line-dot" id="lineDot"></span>
+                        <span class="line-tip" id="lineTip">0</span>
+                    </div>
+                </section>
+
+                <!-- Operator share -->
+                <section class="glass card">
+                    <div class="card-head">
+                        <h3>Operator share</h3>
+                        <span class="muted">all loaded towers</span>
+                    </div>
+                    <div class="share-bar" id="shareBar"></div>
+                    <div class="share-legend" id="shareLegend"></div>
+                </section>
+            </div>
+        </aside>
+
+        <!-- ============ RIGHT COLUMN ============ -->
+        <aside class="right-col">
+
+            <div class="actions">
+                <button class="btn btn-light" id="exportBtn">
+                    <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+                    Export GeoJSON
+                </button>
+                <button class="btn btn-dark" id="resetBtn">
+                    <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>
+                    Reset view
+                </button>
+            </div>
+
+            <section class="glass panel">
+                <!-- Dropdown 1 + Dropdown 2 (assignment requirement) -->
+                <div class="selects">
+                    <label>
+                        <span>1. Network operator</span>
+                        <select id="operatorDropdown" aria-label="Select network operator"></select>
+                    </label>
+                    <label>
+                        <span>2. Specific station</span>
+                        <select id="stationDropdown" aria-label="Select specific station">
+                            <option value="">Loading stations&hellip;</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="search">
+                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                    <input type="search" id="searchInput" placeholder="Search name, OSM ID or operator" autocomplete="off" aria-label="Search stations">
+                </div>
+
+                <div class="tabs" id="tabs" role="tablist"></div>
+
+                <div class="list" id="stationList">
+                    <div class="list-empty">Fetching towers from Overpass API&hellip;</div>
+                </div>
+
+                <div class="panel-foot" id="statusMsg">Fetching live data from OpenStreetMap&hellip;</div>
+            </section>
+
+            <div class="chips-row">
+                <button class="icon-btn" id="chipsAll" title="Show all operators" aria-label="Show all operators">
+                    <svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+                </button>
+                <div class="chips" id="chips"></div>
+            </div>
+
+            <section class="glass station-card" id="stationCard">
+                <div class="station-empty" id="stationEmpty">
+                    <svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                    <span>Select a station to preview it here</span>
+                </div>
+                <div class="station-body" id="stationBody" hidden>
+                    <div class="thumb" id="stationThumb"><span class="thumb-pin" id="thumbPin"></span></div>
+                    <div class="station-info">
+                        <div class="station-id" id="stationId">&mdash;</div>
+                        <div class="station-op" id="stationOp"></div>
+                        <dl>
+                            <dt>Height</dt><dd id="stationHeight">&mdash;</dd>
+                            <dt>Type</dt><dd id="stationType">&mdash;</dd>
+                            <dt>Coords</dt><dd id="stationCoords">&mdash;</dd>
+                        </dl>
+                    </div>
+                </div>
+            </section>
+        </aside>
+
+        <!-- ============ BOTTOM ============ -->
+        <div class="bottom-left">
+            <div class="glass profile">
+                <div class="avatar">GIS</div>
+                <div>
+                    <div class="profile-name">Web GIS Assignment</div>
+                    <div class="profile-sub">COMSATS &middot; Theory Assignment 2</div>
+                </div>
+            </div>
+            <button class="glass round-btn" id="locateBtn" title="Find nearest tower to me" aria-label="Find nearest tower to me">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>
+            </button>
+            <button class="glass round-btn" id="infoBtn" title="About this map" aria-label="About this map">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>
+            </button>
+        </div>
+
+        <div class="glass basemap-switch" id="basemapSwitch" role="tablist" aria-label="Basemap">
+            <button data-basemap="light">Light</button>
+            <button class="active" data-basemap="satellite">Satellite</button>
+            <button data-basemap="terrain">Terrain</button>
+        </div>
+
+        <div class="attrib" id="attrib"></div>
+    </div>
+
+    <!-- Info modal -->
+    <div class="modal" id="infoModal" hidden>
+        <div class="glass modal-card" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+            <button class="modal-close" id="infoClose" aria-label="Close">&times;</button>
+            <h2 id="infoTitle">About this map</h2>
+            <p><b>Study area:</b> Islamabad Capital Territory and Rawalpindi (bounding box 33.55&ndash;33.80&deg;N, 72.90&ndash;73.25&deg;E).</p>
+            <p><b>Data:</b> Live query to the OpenStreetMap Overpass API for communication masts and towers (<code>man_made=mast</code> + <code>tower:type=communication</code>, <code>man_made=communications_tower</code>, <code>communication:mobile_phone=yes</code>) and for any <code>man_made</code> feature whose operator is Jazz, Telenor, Zong, Ufone or PTCL/SCO.</p>
+            <p><b>Operators:</b> Taken only from the OSM <code>operator</code>, <code>brand</code>, <code>network</code> or <code>name</code> tags. Towers without a recognisable operator tag are shown as <i>Other / not tagged</i>; nothing is guessed or randomly assigned.</p>
+            <p><b>Names:</b> Each tower is labelled <i>network + sector + OSM ID</i>, e.g. <i>Jazz H-9 &middot; 7859345509</i>. The sector is the <code>addr:suburb</code> tag when present, otherwise the nearest named sector in OpenStreetMap (within 2.5 km), and the popup says which one it is.</p>
+            <p><b>Saved data:</b> The last result is kept in your browser so a reload shows data instantly; the page still fetches fresh data from the API every time.</p>
+            <p><b>Tip:</b> Use the two dropdowns, the tabs, or the chips to filter. They stay in sync.</p>
+        </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
